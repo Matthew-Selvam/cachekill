@@ -170,6 +170,8 @@ caches, ML model caches (huggingface, torch, chroma), tool binaries
 | `~/.claude` | **SKIP** | agent state + managed plugin checkouts | n/a |
 | `~/.openclaude` | **SKIP** | agent state + managed plugin checkouts | n/a |
 | `~/.hermes` | **SKIP** | active agent session state | n/a |
+| `~/Library/Group Containers` | **SKIP** | app-owned data, e.g. WhatsApp message media (73 GB observed). Clean from inside the app, never by rm | n/a |
+| `~/Library/Application Support` | **SKIP** | app state, not cache; includes agent/Cowork VM bundles (claudevm.bundle rootfs.img ~10 GB each). App-managed | n/a |
 | `~/node_modules` | **CHECK** | project dependencies. Deleting is safe but breaks running dev servers | package manager install |
 
 <!-- REGISTRY-TABLE:END -->

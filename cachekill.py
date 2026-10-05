@@ -119,6 +119,12 @@ REGISTRY: tuple[Rule, ...] = (
     Rule(".claude", SKIP, "agent state + managed plugin checkouts"),
     Rule(".openclaude", SKIP, "agent state + managed plugin checkouts"),
     Rule(".hermes", SKIP, "active agent session state"),
+    Rule("Library/Group Containers", SKIP,
+         "app-owned data, e.g. WhatsApp message media (73 GB observed). "
+         "Clean from inside the app, never by rm"),
+    Rule("Library/Application Support", SKIP,
+         "app state, not cache; includes agent/Cowork VM bundles "
+         "(claudevm.bundle rootfs.img ~10 GB each). App-managed"),
     Rule("node_modules", CHECK,
          "project dependencies. Deleting is safe but breaks running dev servers",
          "package manager install"),
