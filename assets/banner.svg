@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="330" viewBox="0 0 880 330" role="img" aria-label="cachekill scan output in a terminal window">
+  <!-- cachekill banner: real scan output from the session that built the tool.
+       Colors are the tool's own semantics: SAFE green, CHECK amber, SKIP gray
+       on GitHub-dark surface. -->
+  <rect x="0" y="0" width="880" height="330" rx="0" fill="#010409"/>
+  <rect x="12" y="12" width="856" height="306" rx="14" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
+
+  <!-- titlebar -->
+  <circle cx="40" cy="40" r="6" fill="#FF5F57"/>
+  <circle cx="62" cy="40" r="6" fill="#FEBC2E"/>
+  <circle cx="84" cy="40" r="6" fill="#28C840"/>
+  <text x="440" y="45" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="13" fill="#8B949E">cachekill scan</text>
+  <line x1="12.5" y1="60" x2="867.5" y2="60" stroke="#21262D" stroke-width="1"/>
+
+  <!-- prompt -->
+  <text x="40" y="92" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14">
+    <tspan fill="#3FB950" font-weight="bold">$</tspan>
+    <tspan fill="#C9D1D9" dx="8">cachekill scan --min-mb 50</tspan>
+  </text>
+
+  <!-- rows -->
+  <text x="40" y="128" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14">
+    <tspan fill="#C9D1D9">1.3 GB</tspan>
+    <tspan x="180" fill="#3FB950" font-weight="bold">SAFE</tspan>
+    <tspan x="290" fill="#C9D1D9">~/.bun/install/cache</tspan>
+    <tspan x="620" fill="#8B949E">bun package tarball cache</tspan>
+  </text>
+  <text x="40" y="158" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14">
+    <tspan fill="#C9D1D9">897 MB</tspan>
+    <tspan x="180" fill="#D29922" font-weight="bold">CHECK</tspan>
+    <tspan x="290" fill="#C9D1D9">~/Library/Caches/BraveSoftware</tspan>
+    <tspan x="620" fill="#8B949E">'Brave Browser' is running</tspan>
+  </text>
+  <text x="40" y="188" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14">
+    <tspan fill="#C9D1D9">979 MB</tspan>
+    <tspan x="180" fill="#D29922" font-weight="bold">CHECK</tspan>
+    <tspan x="290" fill="#C9D1D9">.../com.docker.docker/.../vms</tspan>
+    <tspan x="620" fill="#8B949E">reclaim inside docker</tspan>
+  </text>
+  <text x="40" y="218" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14">
+    <tspan fill="#C9D1D9">64.8 MB</tspan>
+    <tspan x="180" fill="#8B949E" font-weight="bold">SKIP</tspan>
+    <tspan x="290" fill="#C9D1D9">~/Library/Caches/GeoServices</tspan>
+    <tspan x="620" fill="#8B949E">Apple Maps tiles; macOS owns it</tspan>
+  </text>
+
+  <!-- totals -->
+  <text x="40" y="262" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="bold">
+    <tspan fill="#3FB950">SAFE 2.3 GB</tspan>
+    <tspan x="200" fill="#D29922">CHECK 2.3 GB</tspan>
+    <tspan x="380" fill="#8B949E">SKIP 64.8 MB</tspan>
+  </text>
+
+  <text x="40" y="296" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="12" fill="#8B949E">dry-run by default &#183; refuses anything not classed SAFE</text>
+</svg>
