@@ -36,15 +36,23 @@ anything that did not scan as SAFE.
 
 ```text
 $ cachekill scan --min-mb 50
-    1.3 GB  SAFE   ~/.bun/install/cache               bun package tarball cache
-  979.0 MB  CHECK  ~/Library/Containers/.../vms/0     Docker VM disk image — reclaim INSIDE docker
-  897.4 MB  CHECK  ~/Library/Caches/BraveSoftware     Brave browser HTTP cache — 'Brave Browser' is running
-  431.7 MB  CHECK  ~/.npm/_npx                        npx-installed packages
-  375.8 MB  SAFE   ~/.cargo/registry/src              extracted crate sources
-   64.8 MB  SKIP   ~/Library/Caches/GeoServices       Apple Maps tiles; macOS owns it
+      SIZE  CLASS  PATH                                                                  NOTE
+    1.3 GB  SAFE   ~/.bun/install/cache                                                    bun package tarball cache
+  979.0 MB  CHECK  ~/Library/Containers/.../vms/0                                          Docker VM disk image. Reclaim INSIDE docker (builder/image p
+  931.5 MB  SAFE   ~/Library/Caches/BraveSoftware                                          Brave browser HTTP cache
+  431.7 MB  CHECK  ~/.npm/_npx                                                             npx-installed packages; regenerable but re-fetches on next n
+  375.8 MB  SAFE   ~/.cargo/registry/src                                                   extracted crate sources
+  375.2 MB  SAFE   ~/.npm/_cacache                                                         npm content-addressed cache
+  361.5 MB  SAFE   ~/.cache/uv                                                             uv wheel + index cache
+  101.1 MB  SAFE   ~/.cache/prek                                                           prek (pre-commit) hook virtualenvs
+   64.8 MB  SKIP   ~/Library/Caches/GeoServices                                            Apple Maps tiles; macOS owns it
+   63.5 MB  SAFE   ~/.cache/node                                                           corepack shims/keys cache
+   58.4 MB  SAFE   ~/.cargo/registry/index                                                 crates.io index clone
+   54.5 MB  CHECK  ~/Library/Caches/bun                                                    bun toolchain cache, 'bun' is running; quit it first
+   52.7 MB  SAFE   ~/.cargo/registry/cache                                                 crates.io tarball cache
 
-  SAFE  total: 2.3 GB
-  CHECK total: 2.3 GB
+  SAFE  total: 3.6 GB
+  CHECK total: 1.4 GB
   SKIP  total: 64.8 MB
 ```
 
@@ -89,10 +97,10 @@ refused by a safety rule.
 
 **Liveness-aware.** Browser caches are SAFE, after you quit the browser. If
 Chrome, Brave, Firefox, Spotify, bun, or python is running, the entry downgrades
-to CHECK with the reason attached:
+to CHECK with the reason attached (snapshot from an earlier run, with Brave open):
 
 ```text
-897.4 MB  CHECK  ~/Library/Caches/BraveSoftware   Brave browser HTTP cache — 'Brave Browser' is running
+931.2 MB  CHECK  ~/Library/Caches/BraveSoftware   Brave browser HTTP cache, 'Brave Browser' is running
 ```
 
 **Allocated bytes, not apparent size.** Docker's `Docker.raw` reports 24 GB
@@ -130,10 +138,10 @@ caches, ML model caches (huggingface, torch, chroma), tool binaries
 | `~/.cache/uv` | **SAFE** | uv wheel + index cache | next uv sync/pip |
 | `~/Library/Caches/pip` | **SAFE** | pip download cache | next pip install |
 | `~/Library/Caches/bun` | **SAFE** | bun toolchain cache | next bun run |
-| `~/go/pkg/mod` | **CHECK** | Go module cache — clean with `go clean -modcache`, not by rm | go mod download |
+| `~/go/pkg/mod` | **CHECK** | Go module cache. Clean with `go clean -modcache`, not by rm | go mod download |
 | `~/.cache/puppeteer` | **SAFE** | puppeteer Chromium builds | next puppeteer install re-downloads |
 | `~/Library/Caches/ms-playwright` | **SAFE** | playwright browser binaries | npx playwright install |
-| `~/.cache/huggingface` | **SAFE** | HF hub models — re-download on demand | transformers snapshot_download |
+| `~/.cache/huggingface` | **SAFE** | HF hub models, re-download on demand | transformers snapshot_download |
 | `~/.cache/torch` | **SAFE** | torch hub checkpoints | on demand |
 | `~/.cache/chroma/onnx_models` | **SAFE** | chroma default embedder model | chroma re-downloads on first use |
 | `~/.cache/mongodb-binaries` | **SAFE** | mongodb runner binaries | mongodb-memory-server re-downloads |
@@ -149,20 +157,20 @@ caches, ML model caches (huggingface, torch, chroma), tool binaries
 | `~/Library/Caches/BraveSoftware` | **SAFE** | Brave browser HTTP cache | Brave rebuilds it |
 | `~/Library/Caches/Google/Chrome` | **SAFE** | Chrome HTTP cache | Chrome rebuilds it |
 | `~/Library/Caches/Firefox` | **SAFE** | Firefox HTTP cache | Firefox rebuilds it |
-| `~/Library/Caches/GeoServices` | **SKIP** | Apple Maps tiles; macOS owns it | — |
+| `~/Library/Caches/GeoServices` | **SKIP** | Apple Maps tiles; macOS owns it | n/a |
 | `~/.npm/_npx` | **CHECK** | npx-installed packages; regenerable but re-fetches on next npx | next npx <pkg> |
-| `~/Library/Caches/com.apple.*` | **SKIP** | system-managed; macOS owns it | — |
-| `~/Library/Caches/CloudKit` | **SKIP** | system-managed; macOS owns it | — |
-| `~/Library/Caches/com.apple.helpd` | **SKIP** | system-managed; macOS owns it | — |
-| `~/.ollama/models` | **SKIP** | local LLM blobs — grep your repos for model pins before `ollama rm` | — |
-| `~/Library/Containers/com.docker.docker` | **CHECK** | Docker VM disk image — reclaim INSIDE docker (builder/image prune), never by deleting Docker.raw | — |
-| `~/Downloads` | **SKIP** | user content | — |
-| `~/.rustup` | **CHECK** | rustup toolchains — deleting breaks offline builds | rustup toolchain install |
-| `~/ComfyUI-Installs` | **SKIP** | user content | — |
-| `~/.claude` | **SKIP** | agent state + managed plugin checkouts | — |
-| `~/.openclaude` | **SKIP** | agent state + managed plugin checkouts | — |
-| `~/.hermes` | **SKIP** | active agent session state | — |
-| `~/node_modules` | **CHECK** | project dependencies — deleting is safe but breaks running dev servers | package manager install |
+| `~/Library/Caches/com.apple.*` | **SKIP** | system-managed; macOS owns it | n/a |
+| `~/Library/Caches/CloudKit` | **SKIP** | system-managed; macOS owns it | n/a |
+| `~/Library/Caches/com.apple.helpd` | **SKIP** | system-managed; macOS owns it | n/a |
+| `~/.ollama/models` | **SKIP** | local LLM blobs. Grep your repos for model pins before `ollama rm` | n/a |
+| `~/Library/Containers/com.docker.docker` | **CHECK** | Docker VM disk image. Reclaim INSIDE docker (builder/image prune), never by deleting Docker.raw | n/a |
+| `~/Downloads` | **SKIP** | user content | n/a |
+| `~/.rustup` | **CHECK** | rustup toolchains. Deleting breaks offline builds | rustup toolchain install |
+| `~/ComfyUI-Installs` | **SKIP** | user content | n/a |
+| `~/.claude` | **SKIP** | agent state + managed plugin checkouts | n/a |
+| `~/.openclaude` | **SKIP** | agent state + managed plugin checkouts | n/a |
+| `~/.hermes` | **SKIP** | active agent session state | n/a |
+| `~/node_modules` | **CHECK** | project dependencies. Deleting is safe but breaks running dev servers | package manager install |
 
 <!-- REGISTRY-TABLE:END -->
 

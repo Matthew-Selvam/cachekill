@@ -26,7 +26,7 @@
     <tspan x="620" fill="#8B949E">bun package tarball cache</tspan>
   </text>
   <text x="40" y="158" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14">
-    <tspan fill="#C9D1D9">897 MB</tspan>
+    <tspan fill="#C9D1D9">931 MB</tspan>
     <tspan x="180" fill="#D29922" font-weight="bold">CHECK</tspan>
     <tspan x="290" fill="#C9D1D9">~/Library/Caches/BraveSoftware</tspan>
     <tspan x="620" fill="#8B949E">'Brave Browser' is running</tspan>
@@ -46,8 +46,8 @@
 
   <!-- totals -->
   <text x="40" y="262" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="bold">
-    <tspan fill="#3FB950">SAFE 2.3 GB</tspan>
-    <tspan x="200" fill="#D29922">CHECK 2.3 GB</tspan>
+    <tspan fill="#3FB950">SAFE 3.6 GB</tspan>
+    <tspan x="200" fill="#D29922">CHECK 1.4 GB</tspan>
     <tspan x="380" fill="#8B949E">SKIP 64.8 MB</tspan>
   </text>
 

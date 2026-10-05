@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""cachekill — see what is safe to delete on a full disk before you delete it.
+"""cachekill: see what is safe to delete on a full disk before you delete it.
 
 Every path is classified before anything is touched:
 
@@ -38,7 +38,7 @@ CHECK = "CHECK"
 SKIP = "SKIP"
 
 # ---------------------------------------------------------------------------
-# Registry — each entry earned its class the hard way (a real disk-reclaim
+# Registry: each entry earned its class the hard way (a real disk-reclaim
 # session). `app` is an optional process-name fragment: when that process is
 # running, a SAFE cache is downgraded to CHECK ("quit the app first").
 # ---------------------------------------------------------------------------
@@ -64,14 +64,14 @@ REGISTRY: tuple[Rule, ...] = (
     Rule("Library/Caches/bun", SAFE, "bun toolchain cache", "next bun run",
          app="bun"),
     Rule("go/pkg/mod", CHECK,
-         "Go module cache — clean with `go clean -modcache`, not by rm",
+         "Go module cache. Clean with `go clean -modcache`, not by rm",
          "go mod download"),
     Rule(".cache/puppeteer", SAFE, "puppeteer Chromium builds",
          "next puppeteer install re-downloads"),
     Rule("Library/Caches/ms-playwright", SAFE, "playwright browser binaries",
          "npx playwright install"),
-    Rule(".cache/huggingface", SAFE, "HF hub models — re-download on demand",
-         "transformers snapshot_download", app="python"),
+    Rule(".cache/huggingface", SAFE, "HF hub models, re-download on demand",
+         "transformers snapshot_download"),
     Rule(".cache/torch", SAFE, "torch hub checkpoints", "on demand"),
     Rule(".cache/chroma/onnx_models", SAFE, "chroma default embedder model",
          "chroma re-downloads on first use"),
@@ -108,19 +108,19 @@ REGISTRY: tuple[Rule, ...] = (
     Rule("Library/Caches/com.apple.helpd", SKIP, "system-managed; macOS owns it"),
     # --- Deliberate skip: state or user content, not cache ---
     Rule(".ollama/models", SKIP,
-         "local LLM blobs — grep your repos for model pins before `ollama rm`"),
+         "local LLM blobs. Grep your repos for model pins before `ollama rm`"),
     Rule("Library/Containers/com.docker.docker", CHECK,
-         "Docker VM disk image — reclaim INSIDE docker (builder/image prune), "
+         "Docker VM disk image. Reclaim INSIDE docker (builder/image prune), "
          "never by deleting Docker.raw"),
     Rule("Downloads", SKIP, "user content"),
-    Rule(".rustup", CHECK, "rustup toolchains — deleting breaks offline builds",
+    Rule(".rustup", CHECK, "rustup toolchains. Deleting breaks offline builds",
          "rustup toolchain install"),
     Rule("ComfyUI-Installs", SKIP, "user content"),
     Rule(".claude", SKIP, "agent state + managed plugin checkouts"),
     Rule(".openclaude", SKIP, "agent state + managed plugin checkouts"),
     Rule(".hermes", SKIP, "active agent session state"),
     Rule("node_modules", CHECK,
-         "project dependencies — deleting is safe but breaks running dev servers",
+         "project dependencies. Deleting is safe but breaks running dev servers",
          "package manager install"),
 )
 
@@ -162,6 +162,12 @@ def _rule_for(rel: str) -> tuple[Rule | None, str]:
 
 
 def _app_running(fragment: str) -> bool:
+    """True when a process matching `fragment` is running, other than us.
+
+    `pgrep -f` matches our own interpreter (any `app="python"` rule would
+    permanently self-downgrade, because cachekill runs under python), so our
+    own PID and its ancestors are excluded before the match.
+    """
     if not fragment:
         return False
     try:
@@ -171,21 +177,45 @@ def _app_running(fragment: str) -> bool:
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
-    return r.returncode == 0
+    if r.returncode != 0:
+        return False
+    matched = {int(x) for x in r.stdout.split() if x.strip().isdigit()}
+    if not matched:
+        return False
+    # Exclude ourselves and our ancestors: pgrep skips its own process but not
+    # the interpreter or shell that launched us, so an app fragment like
+    # "python" or "bun" could otherwise match cachekill's own process tree.
+    excluded = set()
+    pid = os.getpid()
+    for _ in range(15):
+        if pid in excluded or pid <= 1:
+            break
+        try:
+            out = subprocess.run(
+                ["ps", "-o", "ppid=", "-p", str(pid)],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip()
+            ppid = int(out.split()[0])
+        except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+            break
+        excluded.add(pid)
+        excluded.add(ppid)
+        pid = ppid
+    return bool(matched - excluded)
 
 
 def classify(path: str) -> tuple[str, str, str, str]:
     """Return (class, note, regen, match_kind) for an absolute path."""
     rel = _rel(path)
     if not rel:  # home itself
-        return SKIP, "this is $HOME — refusing by definition", "", "home"
+        return SKIP, "this is $HOME, refusing by definition", "", "home"
     rule, kind = _rule_for(rel)
     if rule is None:
-        return (CHECK, "unknown to cachekill — verify by hand", "", "unknown")
+        return (CHECK, "unknown to cachekill, verify by hand", "", "unknown")
     cls, note, regen = rule.cls, rule.note, rule.regen
     if rule.app and cls == SAFE and _app_running(rule.app):
         cls = CHECK
-        note += f" — '{rule.app}' is running; quit it first"
+        note += f", '{rule.app}' is running; quit it first"
     return cls, note, regen, kind
 
 
@@ -236,43 +266,74 @@ SCAN_ROOTS = (
 
 
 def scan(min_mb: int = 0, roots: tuple[str, ...] = SCAN_ROOTS) -> list[dict]:
+    """Classify cache dirs under each root, two levels deep.
+
+    Depth 1 entries are always considered (including unknowns, which classify
+    as CHECK). Depth 2 entries are considered only when a registry rule names
+    them, so unrelated subdirs do not flood the output. Nodes that are mere
+    prefixes of a deeper canonical rule (e.g. `.cache/chroma` when the rule
+    targets `.cache/chroma/onnx_models`) are skipped in favor of the deeper
+    node, and a node whose rule ancestor was already emitted is skipped too,
+    so nothing is ever double-counted in the totals.
+    """
     entries: list[dict] = []
     seen: set[str] = set()
+
+    def consider(path: str, allow_unknown: bool) -> None:
+        if path in seen or not os.path.isdir(path):
+            return
+        if os.path.dirname(path) in seen:
+            # an emitted ancestor already counted this subtree
+            return
+        rel = _rel(path)
+        rule, kind = _rule_for(rel)
+        if rule is None:
+            if not allow_unknown:
+                return
+            if any(r.rel.startswith(rel + "/") for r in REGISTRY):
+                # a known rule lives deeper; its node will represent this subtree
+                return
+        elif kind != "wildcard" and rule.rel != rel and rule.rel.startswith(rel + "/"):
+            # canonical rule node is deeper (e.g. .../Google -> .../Google/Chrome);
+            # defer so the entry carries the canonical path
+            return
+        seen.add(path)
+        cls, note, regen, kind = classify(path)
+        size, nfiles = tree_size(path)
+        if size < min_mb * 1024 * 1024:
+            return
+        entries.append({
+            "path": path,
+            "class": cls,
+            "size_bytes": size,
+            "size": human(size),
+            "files": nfiles,
+            "note": note,
+            "regen": regen,
+            "match": kind,
+        })
+
     for rel_root in roots:
         root = os.path.join(HOME, rel_root)
         if not os.path.isdir(root):
             continue
-        # one entry per directory directly under the root
+        # a root that is itself a registry rule is an entry in its own right;
+        # the parent-seen guard then keeps its children from double-counting
+        if _rule_for(rel_root)[0] is not None and _rule_for(rel_root)[1] == "exact":
+            consider(root, allow_unknown=True)
         try:
             children = sorted(os.listdir(root))
         except OSError:
             continue
         for child in children:
             path = os.path.join(root, child)
-            if not os.path.isdir(path) or path in seen:
+            consider(path, allow_unknown=True)
+            try:
+                grandchildren = sorted(os.listdir(path))
+            except OSError:
                 continue
-            rel = _rel(path)
-            # collapse known multi-dir entries to their canonical node
-            rule, _ = _rule_for(rel)
-            if rule is not None and rule.rel != rel and rule.rel.startswith(rel):
-                # e.g. go/pkg/mod node for go/pkg/mod/cache/download — keep the
-                # deeper canonical entry instead
-                continue
-            seen.add(path)
-            cls, note, regen, kind = classify(path)
-            size, nfiles = tree_size(path)
-            if size < min_mb * 1024 * 1024:
-                continue
-            entries.append({
-                "path": path,
-                "class": cls,
-                "size_bytes": size,
-                "size": human(size),
-                "files": nfiles,
-                "note": note,
-                "regen": regen,
-                "match": kind,
-            })
+            for gc in grandchildren:
+                consider(os.path.join(path, gc), allow_unknown=False)
     entries.sort(key=lambda e: -e["size_bytes"])
     return entries
 
@@ -344,19 +405,29 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
+    def _add_json(p):
+        # accept --json on either side of the subcommand; the module docstring
+        # and README document the post-subcommand form
+        p.add_argument("--json", dest="sub_json", action="store_true",
+                       help=argparse.SUPPRESS)
+
     sp = sub.add_parser("scan", help="classify cache dirs")
     sp.add_argument("--min-mb", type=int, default=0)
+    _add_json(sp)
 
     ep = sub.add_parser("explain", help="why is this path classified X")
     ep.add_argument("path")
+    _add_json(ep)
 
     dp = sub.add_parser("delete", help="dry-run (default) or --apply delete of SAFE entries")
     dp.add_argument("--apply", action="store_true")
     dp.add_argument("--min-mb", type=int, default=0)
     dp.add_argument("--path", action="append", default=[],
                     help="restrict to these paths (repeatable)")
+    _add_json(dp)
 
     args = ap.parse_args(argv)
+    args.json = args.json or getattr(args, "sub_json", False)
 
     if args.cmd == "explain":
         p = os.path.abspath(os.path.expanduser(args.path))
@@ -412,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\n  {verb}: {human(freed)}")
             for e in planned:
                 if e.get("action") == "refused":
-                    print(f"  refused: {e['path']} — {e['why']}")
+                    print(f"  refused: {e['path']} : {e['why']}")
         return 3 if any(e.get("action") == "refused" for e in planned) else 0
     return 0
 
