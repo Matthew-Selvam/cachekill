@@ -120,7 +120,7 @@ Grep your repos for model pins before any `ollama rm`.
 
 ## The registry
 
-Every rule earned its class during a real disk-reclaim session. 39 rules cover
+Every rule earned its class during a real disk-reclaim session. 41 rules cover
 package managers (npm, bun, uv, pip, cargo, gradle, go), browser and app
 caches, ML model caches (huggingface, torch, chroma), tool binaries
 (puppeteer, playwright, mongodb), and the deliberate skips.

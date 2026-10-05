@@ -28,8 +28,8 @@ The scariest moment in dev: disk at 99% and you're about to rm -rf something you
 
 ## Fact ledger (every claim above, checked against source)
 
-- "Disk hit 99% / cleared 6.4 GB / free space went DOWN": from
-  HANDOFF-2026-10-01-disk-reclaim-docker-wedged.md: 99% full, ~6.4 GB cleared,
+- "Disk hit 99% / cleared 6.4 GB / free space went DOWN": from the
+  2026-10-01 disk-reclaim handoff doc: 99% full, ~6.4 GB cleared,
   free dropped 317 MB in the same window. Documented, first-party.
 - "Docker's VM image ate every byte back": same handoff, Docker.raw grew
   ~6.7 GB during the session vs 6.4 GB reclaimed.
