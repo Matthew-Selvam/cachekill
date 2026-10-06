@@ -109,6 +109,11 @@ REGISTRY: tuple[Rule, ...] = (
     # --- Deliberate skip: state or user content, not cache ---
     Rule(".ollama/models", SKIP,
          "local LLM blobs. Grep your repos for model pins before `ollama rm`"),
+    Rule("Library/Containers/net.whatsapp.WhatsApp", SKIP,
+         "WhatsApp app state, not cache; reclaim via WhatsApp Settings > Storage"),
+    Rule("Library/Group Containers/group.net.whatsapp.WhatsApp.shared", SKIP,
+         "WhatsApp message media (~75 GB): irreplaceable received photos/videos. "
+         "Reclaim via WhatsApp Settings > Storage > Manage Storage, never by rm"),
     Rule("Library/Containers/com.docker.docker", CHECK,
          "Docker VM disk image. Reclaim INSIDE docker (builder/image prune), "
          "never by deleting Docker.raw"),
@@ -268,6 +273,8 @@ SCAN_ROOTS = (
     ".gradle/caches",
     ".cargo/registry",
     "Library/Containers/com.docker.docker/Data/vms",
+    "Library/Containers/net.whatsapp.WhatsApp",
+    "Library/Group Containers/group.net.whatsapp.WhatsApp.shared",
 )
 
 
@@ -278,12 +285,25 @@ def scan(min_mb: int = 0, roots: tuple[str, ...] = SCAN_ROOTS) -> list[dict]:
     as CHECK). Depth 2 entries are considered only when a registry rule names
     them, so unrelated subdirs do not flood the output. Nodes that are mere
     prefixes of a deeper canonical rule (e.g. `.cache/chroma` when the rule
-    targets `.cache/chroma/onnx_models`) are skipped in favor of the deeper
+    targets `.cache/chroma/onnx_models`) are deferred in favor of the deeper
     node, and a node whose rule ancestor was already emitted is skipped too,
-    so nothing is ever double-counted in the totals.
+    so nothing is ever double-counted in the totals. A deferred parent whose
+    canonical node ends up NOT emitted (missing on disk, or below the size
+    floor) falls back to a CHECK entry, so data is never silently invisible.
+    Symlinked dirs are shown as SKIP and never deleted.
     """
     entries: list[dict] = []
     seen: set[str] = set()
+    emitted: set[str] = set()
+    deferred: list[tuple[str, str]] = []  # (path, canonical_rel)
+
+    # parent rel -> rel of the deepest rule directly under it; used to defer
+    # parents toward their canonical rule node
+    canon_child: dict[str, str] = {}
+    for r in REGISTRY:
+        if "/" in r.rel:
+            parent = r.rel.rsplit("/", 1)[0]
+            canon_child.setdefault(parent, r.rel)
 
     def consider(path: str, allow_unknown: bool) -> None:
         if path in seen or not os.path.isdir(path):
@@ -292,22 +312,34 @@ def scan(min_mb: int = 0, roots: tuple[str, ...] = SCAN_ROOTS) -> list[dict]:
             # an emitted ancestor already counted this subtree
             return
         rel = _rel(path)
+        if os.path.islink(path):
+            seen.add(path)
+            entries.append({
+                "path": path, "class": SKIP,
+                "size_bytes": 0, "size": human(0), "files": 0,
+                "note": f"symlink to {os.readlink(path)}; cachekill does not follow",
+                "regen": "", "match": "symlink",
+            })
+            return
         rule, kind = _rule_for(rel)
         if rule is None:
             if not allow_unknown:
                 return
-            if any(r.rel.startswith(rel + "/") for r in REGISTRY):
+            if rel in canon_child:
                 # a known rule lives deeper; its node will represent this subtree
+                deferred.append((path, canon_child[rel]))
                 return
         elif kind != "wildcard" and rule.rel != rel and rule.rel.startswith(rel + "/"):
             # canonical rule node is deeper (e.g. .../Google -> .../Google/Chrome);
             # defer so the entry carries the canonical path
+            deferred.append((path, rule.rel))
             return
         seen.add(path)
         cls, note, regen, kind = classify(path)
         size, nfiles = tree_size(path)
         if size < min_mb * 1024 * 1024:
             return
+        emitted.add(path)
         entries.append({
             "path": path,
             "class": cls,
@@ -334,12 +366,38 @@ def scan(min_mb: int = 0, roots: tuple[str, ...] = SCAN_ROOTS) -> list[dict]:
         for child in children:
             path = os.path.join(root, child)
             consider(path, allow_unknown=True)
+            if os.path.dirname(path) in seen:
+                # the root itself was emitted (it is its own registry rule), so
+                # its whole subtree is already represented; descending would
+                # emit nested nodes and double-count the same bytes
+                continue
             try:
                 grandchildren = sorted(os.listdir(path))
             except OSError:
                 continue
             for gc in grandchildren:
                 consider(os.path.join(path, gc), allow_unknown=False)
+
+    # deferred parents whose canonical node never made it into the output
+    # (missing on disk, empty, or below the size floor) fall back to CHECK,
+    # so their data is never silently invisible
+    for path, canon_rel in deferred:
+        if os.path.join(HOME, canon_rel) in emitted:
+            continue
+        if path in seen or os.path.dirname(path) in seen:
+            continue
+        seen.add(path)
+        size, nfiles = tree_size(path)
+        if size < min_mb * 1024 * 1024:
+            continue
+        entries.append({
+            "path": path, "class": CHECK,
+            "size_bytes": size, "size": human(size), "files": nfiles,
+            "note": (f"unclassified data under a managed cache path "
+                     f"(canonical node ~/{canon_rel} not present)"),
+            "regen": "", "match": "deferred-fallback",
+        })
+
     entries.sort(key=lambda e: -e["size_bytes"])
     return entries
 
@@ -359,7 +417,7 @@ def _refusal(path: str, cls: str) -> str | None:
     if cls != SAFE:
         return f"refusing: class is {cls} (only SAFE is deletable)"
     if os.path.islink(p):
-        return "refusing: path itself is a symlink"
+        return "refusing: path is a symlink"
     return None
 
 
@@ -367,6 +425,10 @@ def delete_plan(entries: list[dict], apply: bool) -> tuple[list[dict], int]:
     planned, freed = [], 0
     for e in entries:
         why = _refusal(e["path"], e["class"])
+        if not why and apply and os.path.islink(e["path"]):
+            # belt-and-braces: symlink entries are SKIP already, but never
+            # let rmtree anywhere near a link regardless of classification
+            why = "refusing: path is a symlink"
         if why:
             e = dict(e, action="refused", why=why)
         elif apply:

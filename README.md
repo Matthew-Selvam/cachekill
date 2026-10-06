@@ -163,6 +163,8 @@ caches, ML model caches (huggingface, torch, chroma), tool binaries
 | `~/Library/Caches/CloudKit` | **SKIP** | system-managed; macOS owns it | n/a |
 | `~/Library/Caches/com.apple.helpd` | **SKIP** | system-managed; macOS owns it | n/a |
 | `~/.ollama/models` | **SKIP** | local LLM blobs. Grep your repos for model pins before `ollama rm` | n/a |
+| `~/Library/Containers/net.whatsapp.WhatsApp` | **SKIP** | WhatsApp app state, not cache; reclaim via WhatsApp Settings > Storage | n/a |
+| `~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared` | **SKIP** | WhatsApp message media (~75 GB): irreplaceable received photos/videos. Reclaim via WhatsApp Settings > Storage > Manage Storage, never by rm | n/a |
 | `~/Library/Containers/com.docker.docker` | **CHECK** | Docker VM disk image. Reclaim INSIDE docker (builder/image prune), never by deleting Docker.raw | n/a |
 | `~/Downloads` | **SKIP** | user content | n/a |
 | `~/.rustup` | **CHECK** | rustup toolchains. Deleting breaks offline builds | rustup toolchain install |
